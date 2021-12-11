@@ -12,7 +12,7 @@ chmiUrl = 'https://hydro.chmi.cz/hpps/hpps_prfdyn.php?seq=307237'   # CHMI page
 updateInterval = 15                                                 # Update interval in minutes
 deviceName = 'Nežárka - Stav'                                       # Device name
 # Nezarka - Lasenice
-regExp = "r'<table [^>]*>\\n<tr >\\n<th.*<\/th>\\n<\/tr>\\n<tr [^>]*>\\n<td [^>]*>([0-9]{2}\.[0-9]{2}\.[0-9]{4} [0-9]{2}:[0-9]{2})<\/td>\\n<td [^>]*>([0-9]*)<\/td>\\n<td [^>]*>([0-9.]*)<\/td>\\n<td [^>]*>([0-9.]*)<\/td>'"
+regExp = r'<table [^>]*>\\n<tr >\\n<th.*<\/th>\\n<\/tr>\\n<tr [^>]*>\\n<td [^>]*>([0-9]{2}\.[0-9]{2}\.[0-9]{4} [0-9]{2}:[0-9]{2})<\/td>\\n<td [^>]*>([0-9]*)<\/td>\\n<td [^>]*>([0-9.]*)<\/td>\\n<td [^>]*>([0-9.]*)<\/td>'
 # deviceIndex = 99
 
 domoticz.Log("chmi_hydro: Started!")
