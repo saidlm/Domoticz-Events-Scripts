@@ -2,7 +2,7 @@
 -- Base on - origanal script from Toulon7559; addapted for dzVents by Henry Joubert
 -- Martin Saidl 2021
 
-        local version = '1.0'                   -- current version of script 
+        local version = '1.1'                   -- current version of script 
         ------------------------------------------------------------------------
         local LOGGING = false                   -- true or false LOGGING info to domoticz log.
         
@@ -17,10 +17,21 @@
         local AliveTime = 60
 
         -- Servers Settings
-        local baseurl = "http://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?"
-        local ID = <PWS ID>
-        local PASSWORD = <PASSWORD>
-
+        -- Configuration for Weatherundeground like servers
+        local cfg = {
+        -- Weatherwunderground
+            {   
+                url = 'http://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?',
+                id = <PWS ID>,
+                pass = <PASSWORD>,
+            },
+        -- xxxx.xy
+            --{
+            --    url = "http://xxxx.xy/weatherstation/updateweatherstation.php?",
+            --    id = <PWS ID>,
+            --    pass = <PASSWORD>,
+            --},
+        }
 
 --********
 -- FUNCTIONS
@@ -78,48 +89,54 @@ return {
     
     -- Current date as date.year, date.month, date.day, date.hour, date.min, date.sec
         date = os.date("*t")
-        WU_URL= baseurl .. "ID=" .. ID .. "&PASSWORD=" .. PASSWORD .. "&dateutc=" .. timestring
-    
+        
+         url = ''
+        
         if Outside_Temp_Hum ~= '' and domoticz.devices(Outside_Temp_Hum).lastUpdate.minutesAgo < AliveTime then
-           WU_URL = WU_URL .. "&tempf=" .. string.format("%3.1f", CelciusToFarenheit(domoticz.devices(Outside_Temp_Hum).temperature))
-           WU_URL = WU_URL .. "&humidity=" .. domoticz.devices(Outside_Temp_Hum).humidity
-           WU_URL = WU_URL .. "&dewptf=" .. string.format("%3.1f", CelciusToFarenheit(domoticz.devices(Outside_Temp_Hum).dewPoint))
-           log(domoticz,'WeatherReporter - Addin Temp&hum to URL:' .. WU_URL)
+           url = url .. "&tempf=" .. string.format("%3.1f", CelciusToFarenheit(domoticz.devices(Outside_Temp_Hum).temperature))
+           url = url .. "&humidity=" .. domoticz.devices(Outside_Temp_Hum).humidity
+           url = url .. "&dewptf=" .. string.format("%3.1f", CelciusToFarenheit(domoticz.devices(Outside_Temp_Hum).dewPoint))
+           log(domoticz,'Adding Temp&hum to URL:' .. url)
         end
         
         if Barometer ~= '' and domoticz.devices(Barometer).lastUpdate.minutesAgo < AliveTime then
-           WU_URL = WU_URL .. "&baromin=" .. string.format("%2.2f", hPatoInches(domoticz.devices(Barometer).barometer))
-           log(domoticz,'WeatherReporter - Adding Preasure to URL:' .. WU_URL)
+           url = url .. "&baromin=" .. string.format("%2.2f", hPatoInches(domoticz.devices(Barometer).barometer))
+           log(domoticz,'Adding Preasure to URL:' .. url)
         end
         
         if RainMeter ~= '' and domoticz.devices(RainMeter).lastUpdate.minutesAgo < AliveTime then
-           WU_URL = WU_URL .. "&dailyrainin=" .. string.format("%2.2f", mmtoInches(domoticz.devices(RainMeter).rain))
-           WU_URL = WU_URL .. "&rainin=" .. string.format("%2.2f", mmtoInches(domoticz.devices(RainMeter).rainRate))
-           log(domoticz,'WeatherReporter - Adding Rain to URL:' .. WU_URL)
+           url = url .. "&dailyrainin=" .. string.format("%2.2f", mmtoInches(domoticz.devices(RainMeter).rain))
+           url = url .. "&rainin=" .. string.format("%2.2f", mmtoInches(domoticz.devices(RainMeter).rainRate))
+           log(domoticz,'Adding Rain to URL:' .. url)
         end
         
         if WindMeter ~= '' and domoticz.devices(WindMeter).lastUpdate.minutesAgo < AliveTime then
-           WU_URL = WU_URL .. "&winddir=" .. string.format("%.0f", domoticz.devices(WindMeter).direction)
-           WU_URL = WU_URL .. "&windspeedmph=" .. string.format("%.0f", kmhtomph(domoticz.devices(WindMeter).speed))
-           WU_URL = WU_URL .. "&windgustmph=" .. string.format("%.0f", mstomph(domoticz.devices(WindMeter).gust))
-           log(domoticz,'WeatherReporter - Adding Wind to URL:' .. WU_URL)
+           url = url .. "&winddir=" .. string.format("%.0f", domoticz.devices(WindMeter).direction)
+           url = url .. "&windspeedmph=" .. string.format("%.0f", kmhtomph(domoticz.devices(WindMeter).speed))
+           url = url .. "&windgustmph=" .. string.format("%.0f", mstomph(domoticz.devices(WindMeter).gust))
+           log(domoticz,'Adding Wind to URL:' .. url)
         end
         
         if UVMeter ~= '' and domoticz.devices(UVMeter).lastUpdate.minutesAgo < AliveTime then
-            WU_URL = WU_URL .. "&UV=" .. string.format("%.1f", (domoticz.devices(UVMeter).uv))
-            log(domoticz,'WeatherReporter - Adding UV to URL:' .. WU_URL)
+            url = url .. "&UV=" .. string.format("%.1f", (domoticz.devices(UVMeter).uv))
+            log(domoticz,'Adding UV to URL:' .. url)
         end
         
         if SolarRadiation ~= '' and domoticz.devices(SolarRadiation).lastUpdate.minutesAgo < AliveTime then
-            WU_URL = WU_URL .. "&solarradiation=" .. string.format("%.1f", (domoticz.devices(SolarRadiation).radiation))
-            log(domoticz,'WeatherReporter - Adding Sloars Radiation to URL:' .. WU_URL)
+            url = url .. "&solarradiation=" .. string.format("%.1f", (domoticz.devices(SolarRadiation).radiation))
+            log(domoticz,'Adding Sloars Radiation to URL:' .. url)
         end
         
-        WU_URL = WU_URL .. "&softwaretype=" .. SoftwareType .. "&action=updateraw"
+        url = url .. "&softwaretype=" .. SoftwareType .. "&action=updateraw"
         
-        log(domoticz,'WeatherReporter - Sending information to URL:' .. WU_URL)
-        domoticz.openURL(WU_URL)
-        log(domoticz,'WetherReporter - Done')
-
+        for i, server in ipairs(cfg) do
+            serverUrl = server.url .. "ID=" .. server.id .. "&PASSWORD=" .. server.pass .. "&dateutc=" .. timestring
+            serverUrl = serverUrl .. url
+            log(domoticz,'Sending information to URL:' .. serverUrl)
+            domoticz.openURL(serverUrl)
+        end
+        
+        log(domoticz,'Done')
+        log(domoticz,'')
 	end
 }
