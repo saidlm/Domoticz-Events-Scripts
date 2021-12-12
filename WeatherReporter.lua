@@ -2,7 +2,7 @@
 -- Base on - origanal script from Toulon7559; addapted for dzVents by Henry Joubert
 -- Martin Saidl 2021
 
-        local version = '1.1'                   -- current version of script 
+        local version = '1.2'                   -- current version of script 
         ------------------------------------------------------------------------
         local LOGGING = false                   -- true or false LOGGING info to domoticz log.
         
@@ -18,7 +18,7 @@
 
         -- Servers Settings
         -- Configuration for Weatherundeground like servers
-        local cfg = {
+        local wuCfg = {
         -- Weatherwunderground
             {   
                 url = 'http://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?',
@@ -32,6 +32,7 @@
             --    pass = <PASSWORD>,
             --},
         }
+
 
 --********
 -- FUNCTIONS
@@ -69,11 +70,22 @@ return {
         marker = "WeatherReporter"
     },
 	on = {
-        timer = { 'every minute' }
+        timer = { 'every minute' },
+        customEvents = { 'nextIn30s' },
 	    },
-	execute = function(domoticz)
+	execute = function(domoticz, item)
+        
         log(domoticz,'')
         log(domoticz,'WeatherReporter  ver: '.. version)
+        
+        -- Start the script in every 30s
+        if item.isTimer then
+            domoticz.emitEvent('nextIn30s', domoticz.time.rawTime ).afterSec(30)
+            log(domoticz,'Started as delayed event')
+        else
+            log(domoticz,'Started by Domoticz -> Setting netx start in 30s')
+        end
+        
     -- Extraction of required calendar info
         utc_dtime = os.date("!%m-%d-%y %H:%M:%S",os.time())
         month = string.sub(utc_dtime, 1, 2)
@@ -129,7 +141,7 @@ return {
         
         url = url .. "&softwaretype=" .. SoftwareType .. "&action=updateraw"
         
-        for i, server in ipairs(cfg) do
+        for i, server in ipairs(wuCfg) do
             serverUrl = server.url .. "ID=" .. server.id .. "&PASSWORD=" .. server.pass .. "&dateutc=" .. timestring
             serverUrl = serverUrl .. url
             log(domoticz,'Sending information to URL:' .. serverUrl)
