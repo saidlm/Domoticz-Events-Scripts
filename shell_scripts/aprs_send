@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# aprs_send 1.0 (c) 2021 Martin Saidl
+# Small shell APRS beacon script
+# Written in bash based on ncat / nc utility
+# For some version of nc is necessary to add -q 3 parameter
+#
+# $1 = APRS message (e.g. WX report)
+# $2 = call (e.g. OK3MS)
+# $3 = SSID (e.g. 5 for WX station)
+# $4 = APRS-IS password
+# $5 = APRS-IS address
+# $6 = APRS-IS poert (14580)
+
+printf "%s\n" "user $2 pass $4" "$2-$3>APRS,TCPIP*:$1" | nc $5 $6
