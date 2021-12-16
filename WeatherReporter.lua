@@ -42,7 +42,7 @@
             ssid = '5',
             pass = <PASSKEY>,
             loc = '1234.12N/12345.12E',
-            desc = 'GARNI2055/Domoticz'
+            descr = 'GARNI2055/Domoticz'
         }
         
 
@@ -204,7 +204,7 @@ return {
         
             aprsMsg = aprsMsg .. aprs.windDir .. '/' .. aprs.windSpeed .. aprs.windGust ..
                 aprs.temp .. aprs.rainHour .. aprs.rain24 .. aprs.rainDay .. aprs.hum .. 
-                aprs.press .. aprs.radiation .. aprs.Descr
+                aprs.press .. aprs.radiation .. aprsCfg.descr
                 
             log(domoticz,'APRS - Sending WX Report: ' .. aprsMsg)
             
