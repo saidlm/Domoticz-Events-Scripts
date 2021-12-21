@@ -70,6 +70,14 @@ local function kmhtomph(kmh)
    return kmh * 0.621371
 end
 
+local function positiveonly(num)
+    if num > 0 then
+        return num
+    else 
+        return 0
+    end
+end
+
 local function log(domoticz, text, lvlError)
     local lvlLog = domoticz.LOG_INFO
     if lvlError ~= nil and lvlError == true then lvlLog = domoticz.LOG_ERROR end 
@@ -85,6 +93,10 @@ return {
         timer = { 'every minute' },
         customEvents = { 'nextIn30s' },
 	    },
+    data = {
+        rainLast = { initial = 0 },
+        rainWindow = { history = true, maxItems = 3000, maxHours = 25 },
+        },
 	execute = function(domoticz, item)
         
         log(domoticz,'')
@@ -144,12 +156,18 @@ return {
         end
         
         if RainMeter ~= '' and domoticz.devices(RainMeter).lastUpdate.minutesAgo < AliveTime then
-            rain = mmtoInches(domoticz.devices(RainMeter).rain)
+            rainDay = mmtoInches(domoticz.devices(RainMeter).rain)
             rainRate = mmtoInches(domoticz.devices(RainMeter).rainRate)
-            wu.dailyRainIn = 'dailyrainin=' .. string.format("%2.2f", rain)
+            domoticz.data.rainWindow.add(rainDay - domoticz.data.rainLast)
+            rainHour = positiveonly(domoticz.data.rainWindow.sumSince('01:00:00'))
+            rain24 = positiveonly(domoticz.data.rainWindow.sumSince('24:00:00'))
+            domoticz.data.rainLast = rainDay
+            wu.dailyRainIn = 'dailyrainin=' .. string.format("%2.2f", rainDay)
             wu.rainIn = 'rainin=' .. string.format("%2.2f", rainRate)
-            aprs.rainDay = 'P' .. string.format("%03.0f", rain * 100)
-            log(domoticz,'Adding Rain / Rainrate:' .. rain .. '/' .. rainRate)
+            aprs.rainHour = 'r' .. string.format("%03.0f",  rainHour * 100)
+            aprs.rain24 = 'p' .. string.format("%03.0f",  rain24 * 100)
+            aprs.rainDay = 'P' .. string.format("%03.0f", rainDay * 100)
+            log(domoticz,'Adding Rain / Rainrate:' .. rainDay .. '/' .. rainRate)
         end
         
         if WindMeter ~= '' and domoticz.devices(WindMeter).lastUpdate.minutesAgo < AliveTime then
