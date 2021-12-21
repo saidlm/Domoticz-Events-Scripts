@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# API Key
+apikey=<APPID>
+
+request='
+  { 
+  "external_id": <PWS NICK>,
+  "name": <PWS NAME>,
+  "latitude": 50.010,
+  "longitude": 15.010,
+  "altitude": 500
+  } 
+'
+
+echo "OWM Request"
+echo "-----------"
+echo "API ID: $appid"
+echo "OWM Request: $request"
+
+curl -d "$request" -H "Content-Type: application/json" -X POST http://api.openweathermap.org/data/3.0/stations?appid=$apikey
