@@ -2,7 +2,7 @@
 -- Base on - origanal script from Toulon7559; addapted for dzVents by Henry Joubert
 -- Martin Saidl 2021
 
-        local version = '1.5'                   -- current version of script 
+        local version = '1.6'                   -- current version of script 
         ------------------------------------------------------------------------
         local LOGGING = false                   -- true or false LOGGING info to domoticz log.
         
@@ -98,12 +98,15 @@ return {
     },
 	on = {
         timer = { 'every minute' },
+        devices = { WindMeter, RainMeter },
         httpResponses = { 'owmResponse', 'wuResponse'},
         customEvents = { 'nextIn30s' },
 	    },
     data = {
         rainLast = { initial = 0 },
         rainWindow = { history = true, maxItems = 3000, maxHours = 25 },
+        windGustWindow = { history = true, maxItems = 40, maxMinutes = 10 },
+        rainRateWindow = { history = true, maxItems = 40, maxMinutes = 10 },
         },
 	execute = function(domoticz, item)
         
@@ -112,16 +115,30 @@ return {
         
         -- Start the script in every 30s
         if item.isTimer then
-            domoticz.emitEvent('nextIn30s', domoticz.time.rawTime ).afterSec(30)
             log(domoticz,'Started as delayed event')
+            domoticz.emitEvent('nextIn30s', domoticz.time.rawTime ).afterSec(30)
+        -- HTTP Response handler
         elseif item.isHTTPResponse then
+            log(domoticz,'Trigered by HTTP Response')        
             log(domoticz,item.data)
             return
+        -- Devices handler
+        elseif item.isDevice then
+            log(domoticz,'Trigered by device activity')
+            if item == domoticz.devices(WindMeter) then
+                log(domoticz,'Adding new wind gust value to window: ' .. domoticz.devices(WindMeter).gust)
+                domoticz.data.windGustWindow.add(domoticz.devices(WindMeter).gust)
+            elseif item == domoticz.devices(RainMeter) then
+                log(domoticz,'Adding new rain rate value to window: ' .. domoticz.devices(RainMeter).rainRate)
+                domoticz.data.rainRateWindow.add(domoticz.devices(RainMeter).rainRate)
+            end
+            return
+        -- Reporting
         else
             log(domoticz,'Started by Domoticz -> Setting next start in 30s')
         end
         
-    -- Extraction of required calendar info
+        -- Extraction of required calendar info
         utc_dtime = os.date("!%m-%d-%y %H:%M:%S",os.time())
         month = string.sub(utc_dtime, 1, 2)
         day = string.sub(utc_dtime, 4, 5)
@@ -172,12 +189,20 @@ return {
         
         if RainMeter ~= '' and domoticz.devices(RainMeter).lastUpdate.minutesAgo < AliveTime then
             rainDay = mmtoInches(domoticz.devices(RainMeter).rain)
-            rainRate = mmtoInches(domoticz.devices(RainMeter).rainRate)
-            domoticz.data.rainWindow.add(rainDay - domoticz.data.rainLast)
+            rainRatemm = domoticz.data.rainRateWindow.maxSince('00:00:30')
+            if rainRatemm == nil then
+                rainRate = 0
+            else
+                rainRate = mmtoInches(rainRatemm)
+            end
+            rainDelta = rainDay - domoticz.data.rainLast
+            if rainDelta >= 0 then
+                domoticz.data.rainWindow.add(rainDelta)
+            end
+            domoticz.data.rainLast = rainDay
             rainHour = positiveonly(domoticz.data.rainWindow.sumSince('01:00:00'))
             rain6 = positiveonly(domoticz.data.rainWindow.sumSince('06:00:00'))
             rain24 = positiveonly(domoticz.data.rainWindow.sumSince('24:00:00'))
-            domoticz.data.rainLast = rainDay
             wu.dailyRainIn = 'dailyrainin=' .. string.format("%2.2f", rainDay)
             wu.rainIn = 'rainin=' .. string.format("%2.2f", rainRate)
             owm.rain_1h = tonumber(string.format("%3.0f",  rainHour))
@@ -191,20 +216,29 @@ return {
         
         if WindMeter ~= '' and domoticz.devices(WindMeter).lastUpdate.minutesAgo < AliveTime then
             windDir = domoticz.devices(WindMeter).direction
-            windSpeedM = domoticz.devices(WindMeter).speed
-            windGustM = domoticz.devices(WindMeter).gust
-            windSpeedKM = kmhtomph(windSpeedM)
-            windGustKM = mstomph(windGustM)
+            windGustM = domoticz.data.windGustWindow.maxSince('00:00:30')
+            windGustM5 = domoticz.data.windGustWindow.maxSince('00:05:00')
+            windSpeedKM = kmhtomph(domoticz.devices(WindMeter).speed)
+            if windGustM == nil then
+                windGustKM = 0 
+            else
+                windGustKM = mstomph(windGustM)
+            end
+            if windGustM5 == nil then
+                windGustKM5 = 0
+            else
+                windGustKM5 = mstomph(windGustM5)
+            end
             wu.windDir = 'winddir=' .. string.format("%.0f", windDir)
             wu.windSpeed = 'windspeedmph=' .. string.format("%.0f", windSpeedKM)
             wu.windGust = 'windgustmph=' .. string.format("%.0f", windGustKM)
             owm.wind_deg = tonumber(string.format("%.0f", windDir))                 
             owm.wind_speed = tonumber(string.format("%.1f", windSpeedKM))
-            owm.wind_gust = tonumber(string.format("%.1f", windGustKM))
+            owm.wind_gust = tonumber(string.format("%.1f", windGustKM5))
             aprs.windDir = string.format("%03.0f", windDir)
             aprs.windSpeed = string.format("%03.0f", windSpeedKM)
-            aprs.windGust = 'g' ..string.format("%03.0f", windGustKM)
-            log(domoticz,'Adding Wind: ' .. windDir .. '/' .. windSpeedKM .. ', ' .. windGustKM)
+            aprs.windGust = 'g' ..string.format("%03.0f", windGustKM5)
+            log(domoticz,'Adding Wind: ' .. windDir .. '/' .. windSpeedKM .. ', ' .. windGustKM .. ' [' .. windGustKM5 .. ']' )
         end
         
         if UVMeter ~= '' and domoticz.devices(UVMeter).lastUpdate.minutesAgo < AliveTime then
@@ -248,11 +282,13 @@ return {
             owm.station_id = owmCfg.pwsid
             owm.dt = unixEpoch
             data = domoticz.utils.toJSON(owm)
+            url = 'http://api.openweathermap.org/data/3.0/measurements?appid=' .. owmCfg.appid
             
             log(domoticz, 'OWM JSON: ' .. data)
+            log(domoticz, 'OWM URL: ' .. url)
             
             domoticz.openURL({
-                url = 'http://api.openweathermap.org/data/3.0/measurements?appid=' .. owmCfg.appid,
+                url = url,
                 method = 'POST',
                 postData = '[' .. data .. ']',
                 headers = { ['Content-Type'] = 'application/json' },
