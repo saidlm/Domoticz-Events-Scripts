@@ -1,4 +1,4 @@
-# Domticz-Events-Script
+# Domticz-Events-Scripts
 Set of Domoticz Events scripts writen in python or DzVents
 
 ## CHMI_hydro 
@@ -9,5 +9,6 @@ The script is written in DzVents. It is periodicaly updating weather data on wea
 * In version 1.2 APRS support has been added. Update interval is set to 5 minutes. It calls external script which allows various ways how to sent APRS updates. The example of script is short bash script aprs_send which is updating WX status via TCP/IP (Internet) using APRS-IS server. APRS reporting is tested and it works properly. You can find example of shell script in shell_scripts folder.
 * Open Weather Map repporting has been added to version 1.5. There is also small shell script which helps to create new PWS in OWM database in shell_script folder. The update interval for OWM is currently set to 5 minutes 
 * From version 1.6 Rain Rate and Wind Gust are reported as maximum values from update interval.
+* The reporting to Weathercloud has been added in version 1.7.
 ## WX_cam_helper
 It is pure helper script for main shell script. The purpose of it is to periodicaly start shell script which is getting image from WX camera and sending it via ssh tunnel to external server. In fact it can be easily done with cron but I would like to have everythig on one place - in Domoticz.
