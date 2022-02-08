@@ -2,7 +2,7 @@
 -- Base on - origanal script from Toulon7559; addapted for dzVents by Henry Joubert
 -- Martin Saidl 2021
 
-        local version = '1.6'                   -- current version of script 
+        local version = '1.7'                   -- current version of script 
         ------------------------------------------------------------------------
         local LOGGING = false                   -- true or false LOGGING info to domoticz log.
         
@@ -39,8 +39,14 @@
         local owmCfg = {
             appid = <APPID,
             pwsid = <STATION ID>,
-        }    
-    
+        } 
+
+         -- Configuration for WeatherCloud
+        local wcCfg = {
+            wid = <ID>,
+            key = <KEY>,
+        }
+
         -- Configuration of APRS via APRS-IS
         local aprsCfg = {
             cmd = '/config/scripts/shell_scripts/aprs_send',
@@ -99,7 +105,7 @@ return {
 	on = {
         timer = { 'every minute' },
         devices = { WindMeter, RainMeter },
-        httpResponses = { 'owmResponse', 'wuResponse'},
+        httpResponses = { 'owmResponse', 'wuResponse', 'wcResponse' },
         customEvents = { 'nextIn30s' },
 	    },
     data = {
@@ -126,8 +132,8 @@ return {
         elseif item.isDevice then
             log(domoticz,'Trigered by device activity')
             if item == domoticz.devices(WindMeter) then
-                log(domoticz,'Adding new wind gust value to window: ' .. domoticz.devices(WindMeter).gust)
-                domoticz.data.windGustWindow.add(domoticz.devices(WindMeter).gust)
+                log(domoticz,'Adding new wind gust value to window: ' .. domoticz.devices(WindMeter).gustMs)
+                domoticz.data.windGustWindow.add(domoticz.devices(WindMeter).gustMs)
             elseif item == domoticz.devices(RainMeter) then
                 log(domoticz,'Adding new rain rate value to window: ' .. domoticz.devices(RainMeter).rainRate)
                 domoticz.data.rainRateWindow.add(domoticz.devices(RainMeter).rainRate)
@@ -151,10 +157,9 @@ return {
         timestring = year .. "-" .. month .. "-" .. day .. "+" .. hour .. "%3A" .. minutes .. "%3A" .. seconds
         asrsTimestamp = day .. hour .. minutes
     
-        
-        url = ''
         wu = {}
         owm = {}
+        wc = {}
         aprsMsg = ''
         aprs = {
             windDir = '...', windSpeed = '...', windGust = 'g...', 
@@ -174,6 +179,9 @@ return {
             owm.temperature = tonumber(string.format("%3.1f", tempC))
             owm.humidity =  tonumber(string.format("%2.0f",hum))
             owm.dew_point = tonumber(string.format("%3.1f",dewpC))
+            wc.temp = 'temp/' .. string.format("%.0f", (tempC * 10))
+            wc.hum = 'hum/' .. string.format("%.0f", hum)
+            wc.dewp = 'dew/' ..string.format("%.0f", (dewpC * 10))
             aprs.temp = 't' .. string.format("%03.0f", tempF)
             aprs.hum = 'h' .. string.format("%02.0f", hum)
             log(domoticz,'Adding Temp, hum, dewp: ' .. tempC .. ', ' .. hum .. ', ' .. dewpC)
@@ -183,18 +191,23 @@ return {
             press = domoticz.devices(Barometer).barometer
             wu.press = 'baromin=' ..string.format("%2.2f", hPatoInches(press))
             owm.pressure = tonumber(string.format("%4.1f", press))
+            wc.press = 'bar/' .. string.format("%.0f", (press * 10))
             aprs.press = 'b' .. string.format("%05.0f", press * 10)
             log(domoticz,'Adding Pressure: ' .. press)
         end
         
         if RainMeter ~= '' and domoticz.devices(RainMeter).lastUpdate.minutesAgo < AliveTime then
-            rainDay = mmtoInches(domoticz.devices(RainMeter).rain)
-            rainRatemm = domoticz.data.rainRateWindow.maxSince('00:00:30')
-            if rainRatemm == nil then
-                rainRate = 0
-            else
-                rainRate = mmtoInches(rainRatemm)
+            rainDayMm = domoticz.devices(RainMeter).rain
+            rainRateMm = domoticz.data.rainRateWindow.maxSince('00:00:30')
+            rainRateMm10 = domoticz.data.rainRateWindow.maxSince('00:10:00')
+            if rainRateMm == nil then
+                rainRateMm = 0
             end
+            if rainRateMm10 == nil then
+                rainRateMm10 = 0
+            end
+            rainDay = mmtoInches(rainDayMm)
+            rainRate = mmtoInches(rainRateMm)
             rainDelta = rainDay - domoticz.data.rainLast
             if rainDelta >= 0 then
                 domoticz.data.rainWindow.add(rainDelta)
@@ -208,6 +221,8 @@ return {
             owm.rain_1h = tonumber(string.format("%3.0f",  rainHour))
             owm.rain_6h = tonumber(string.format("%3.0f",  rain6))
             owm.rain_24h = tonumber(string.format("%3.0f",  rain24))
+            wc.rain = 'rain/' .. string.format("%.0f", (rainDayMm * 10))
+            wc.rainRate = 'rainrate/' .. string.format("%.0f", (rainRateMm10 * 10))
             aprs.rainHour = 'r' .. string.format("%03.0f",  rainHour * 100)
             aprs.rain24 = 'p' .. string.format("%03.0f",  rain24 * 100)
             aprs.rainDay = 'P' .. string.format("%03.0f", rainDay * 100)
@@ -216,40 +231,48 @@ return {
         
         if WindMeter ~= '' and domoticz.devices(WindMeter).lastUpdate.minutesAgo < AliveTime then
             windDir = domoticz.devices(WindMeter).direction
+            windSpeedM = domoticz.devices(WindMeter).speedMs
             windGustM = domoticz.data.windGustWindow.maxSince('00:00:30')
             windGustM5 = domoticz.data.windGustWindow.maxSince('00:05:00')
-            windSpeedKM = kmhtomph(domoticz.devices(WindMeter).speed)
+            windGustM10 = domoticz.data.windGustWindow.maxSince('00:10:00')
             if windGustM == nil then
-                windGustKM = 0 
-            else
-                windGustKM = mstomph(windGustM)
+                windGustM = 0 
             end
             if windGustM5 == nil then
-                windGustKM5 = 0
-            else
-                windGustKM5 = mstomph(windGustM5)
+                windGustM5 = 0
             end
+            if windGustM10 == nil then
+                windGustM10 = 0
+            end
+            windSpeedMph = mstomph(windSpeedM)
+            windGustMph = mstomph(windGustM)
+            windGustMph5 = mstomph(windGustM5)
             wu.windDir = 'winddir=' .. string.format("%.0f", windDir)
-            wu.windSpeed = 'windspeedmph=' .. string.format("%.0f", windSpeedKM)
-            wu.windGust = 'windgustmph=' .. string.format("%.0f", windGustKM)
+            wu.windSpeed = 'windspeedmph=' .. string.format("%.0f", windSpeedMph)
+            wu.windGust = 'windgustmph=' .. string.format("%.0f", windGustMph)
             owm.wind_deg = tonumber(string.format("%.0f", windDir))                 
-            owm.wind_speed = tonumber(string.format("%.1f", windSpeedKM))
-            owm.wind_gust = tonumber(string.format("%.1f", windGustKM5))
+            owm.wind_speed = tonumber(string.format("%.1f", windSpeedM))
+            owm.wind_gust = tonumber(string.format("%.1f", windGustM5))
+            wc.wdir = 'wdir/' .. string.format("%.0f", windDir)
+            wc.wspd = 'wspd/' .. string.format("%.0f", (windSpeedM * 10))
+            wc.wspdhi = 'wspdhi/' .. string.format("%.0f", (windGustM10 * 10))
             aprs.windDir = string.format("%03.0f", windDir)
-            aprs.windSpeed = string.format("%03.0f", windSpeedKM)
-            aprs.windGust = 'g' ..string.format("%03.0f", windGustKM5)
-            log(domoticz,'Adding Wind: ' .. windDir .. '/' .. windSpeedKM .. ', ' .. windGustKM .. ' [' .. windGustKM5 .. ']' )
+            aprs.windSpeed = string.format("%03.0f", windSpeedMph)
+            aprs.windGust = 'g' ..string.format("%03.0f", windGustMph5)
+            log(domoticz,'Adding Wind: ' .. windDir .. '/' .. windSpeedMph .. ', ' .. windGustMph .. ' [' .. windGustMph5 .. ']' )
         end
         
         if UVMeter ~= '' and domoticz.devices(UVMeter).lastUpdate.minutesAgo < AliveTime then
             uv = domoticz.devices(UVMeter).uv
-            wu.uv = 'UV=' .. string.format("%.1f", (uv))
+            wu.uv = 'UV=' .. string.format("%.1f", uv)
+            wc.uv = 'uvi/' .. string.format("%.0f", (uv * 10))
             log(domoticz,'Adding UV: ' .. uv)
         end
         
         if SolarRadiation ~= '' and domoticz.devices(SolarRadiation).lastUpdate.minutesAgo < AliveTime then
             radiation = domoticz.devices(SolarRadiation).radiation
-            wu.radiation = 'solarradiation=' .. string.format("%.1f", (radiation))
+            wu.radiation = 'solarradiation=' .. string.format("%.1f", radiation)
+            wc.radiation = 'solarrad/' .. string.format("%.0f", (radiation * 10))
             if radiation >= 1000 then 
                 aprs.radiation = 'l' .. string.format("%04.0f", (radiation))
             else
@@ -259,22 +282,25 @@ return {
         end
         
         -- WU like servers reporting
-        url = wu.temp .. '&' .. wu.hum .. '&' .. wu.dewp .. '&' .. wu.press .. '&' ..
-            wu.rainIn .. '&' .. wu.dailyRainIn .. '&' .. wu.windDir .. '&' ..
-            wu.windSpeed .. '&' .. wu.windGust .. '&' ..wu.uv .. '&' .. wu.radiation
+        if wuCfg ~= nil then
+            url = ''
+            for var, val in pairs(wu) do
+                url = url ..'&' .. val
+            end
         
-        for i, server in ipairs(wuCfg) do
-            url = url .. '&softwaretype=' .. server.software .. '&action=updateraw'
-            serverUrl = server.url .. 'ID=' .. server.id .. '&PASSWORD=' .. server.pass .. '&dateutc=' .. timestring
-            serverUrl = serverUrl .. '&' .. url
+            for i, server in pairs(wuCfg) do
+                url = url .. '&softwaretype=' .. server.software .. '&action=updateraw'
+                serverUrl = server.url .. 'ID=' .. server.id .. '&PASSWORD=' .. server.pass .. '&dateutc=' .. timestring
+                serverUrl = serverUrl .. url
             
-            log(domoticz,'Sending information to URL:' .. serverUrl)
+                log(domoticz,'Sending information to URL:' .. serverUrl)    
             
-            domoticz.openURL({
-                url =  serverUrl,
-                method = 'GET',
-                callback = 'wuResponse'
-                })
+                domoticz.openURL({
+                    url =  serverUrl,
+                    method = 'GET',
+                    callback = 'wuResponse'
+                    })
+            end
         end
         
         -- OWM reporting (every 5 minutes)
@@ -295,6 +321,25 @@ return {
                 callback = 'owmResponse'
             })
         end
+        
+        -- WC reporting (every 10 minutes - mimimum interval value)
+        if wcCfg ~= nil and math.fmod(minutes, 10) == 0 and tonumber(seconds) < 10 then
+            url = ''
+            for var, val in pairs(wc) do
+                url = url ..'/' .. val
+            end
+                
+            serverUrl = 'http://api.weathercloud.net/set/wid/' .. wcCfg.wid .. '/key/' .. wcCfg.key .. url .. '/ver/1.2/type/201'
+            
+            log(domoticz,'Sending information to URL:' .. serverUrl)
+            
+            domoticz.openURL({
+                url =  serverUrl,
+                method = 'GET',
+                callback = 'wcResponse'
+                })
+            
+        end 
         
         -- APRS reporting (every 5 minutes)
         if aprsCfg ~= nil and math.fmod(minutes, 5) == 0 and tonumber(seconds) < 10 then
