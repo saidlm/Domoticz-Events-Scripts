@@ -1,0 +1,117 @@
+- CEM2 Softlink connector dzVents Script
+-- Martin Saidl (c) 2022
+
+        local version = '0.1'                   -- current version of script 
+        ------------------------------------------------------------------------
+        local LOGGING = false                   -- true or false LOGGING info to domoticz log.
+        
+        local cemApiUrl = 'https://cemapi.unimonitor.eu/api'
+        local user = 'UserName'
+        local pass = 'Password'
+        
+        local sensors = {}
+        sensors['CEM2_id1'] = DZ_id1      
+        sensors['CEM2_id2'] = DZ_id2      
+        sensors['sum'] =  DZ_id3        
+        
+        local maxTime = 7200        -- Maximul time interval
+        local timeZone = 3600       -- CEM2 Time zone
+        local mult = 100            -- m3 -> 10l
+        ------------------------------------------------------------------------
+
+local sum = 0
+local updateSum = true
+local unixEpoch = os.time(os.date("!*t")) + timeZone
+
+local function log(domoticz, text, lvlError)
+    local lvlLog = domoticz.LOG_INFO
+    if lvlError ~= nil and lvlError == true then lvlLog = domoticz.LOG_ERROR end 
+    if LOGGING then domoticz.log(text, lvlLog) end 
+end 
+        
+return {
+    logging = {
+        marker = 'CEM2_Softlink'
+    },
+	on = {
+        timer = { 'every 30 minutes' }, -- Start the script in every 30 minutes
+        httpResponses = { 'cemLoginResponse', 'cemDataResponse', 'cemLogoutResponse' },
+	},
+	execute = function(domoticz, item)
+        log(domoticz,'')
+        log(domoticz,'CEM Connector ver: '.. version)
+        
+        -- Start the script in every N minutes
+        if item.isTimer then
+            log(domoticz,'Trigerred by timer')
+            log(domoticz,'Logging to API')
+            local url = cemApiUrl .. '?id=4&user=' .. user .. '&pass=' .. pass 
+            domoticz.openURL({
+                url = url,
+                method = 'GET',
+                callback = 'cemLoginResponse'
+            })
+        -- HTTP Response handler
+        elseif item.isHTTPResponse then
+            log(domoticz,'Trigerred by HTTP Response')
+            log(domoticz,item.trigger)
+            if item.ok then
+                log(domoticz,'200 OK Continue')
+                if (item.trigger == 'cemLoginResponse') then
+                    log(domoticz,'Login successful.')
+                    
+                    local url = cemApiUrl .. '?id=21'
+                    domoticz.openURL({
+                        url = url,
+                        method = 'GET',
+                                callback = 'cemDataResponse'
+                    })
+                
+                elseif (item.trigger == 'cemDataResponse') then
+                    log(domoticz,'Data downloaded.')
+                    log(domoticz,item.data)
+                    
+                    local json = domoticz.utils.fromJSON(item.data)
+                    
+                    for i, sensorCem in pairs(json) do
+                        local varId = sensorCem.var_id
+                        local value = sensorCem.values[1]["value"]
+                        local timestamp = sensorCem.values[1]["timestamp"]
+                        
+                        local delay = (unixEpoch - tonumber(timestamp) / 1000)
+                        log(domoticz, 'Time since last measurement: ' .. delay/60)
+                        if (delay < maxTime) then
+                            sum = sum + value
+                            domoticz.devices(sensors[varId]).updateCounter(value * mult)
+                            log(domoticz,'Device value updated')
+                        else
+                            updateSum = false
+                            log(domoticz,'Sensor value is too old!', true)
+                        end
+                    end
+                    
+                    if updateSum then
+                        domoticz.devices(sensors['sum']).updateCounter(sum * mult)
+                    end
+                    
+                    local url = cemApiUrl .. '?id=5' 
+                    domoticz.openURL({
+                        url = url,
+                        method = 'GET',
+                        callback = 'cemLogoutResponse'
+                    })
+                
+                elseif (item.trigger == 'cemLogoutResponse') then
+                    log(domoticz,'Logout successful.')
+                else 
+                    log(domoticz,'Unknown trigger!', true)
+                end
+            else
+                log(domoticz,'Transaction Error!', true)
+            end
+	    end
+	    
+        log(domoticz,'Done')
+        log(domoticz,'')
+    end
+}
