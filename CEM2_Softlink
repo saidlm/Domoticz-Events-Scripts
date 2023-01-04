@@ -1,7 +1,7 @@
-- CEM2 Softlink connector dzVents Script
+-- CEM2 Softlink connector dzVents Script
 -- Martin Saidl (c) 2022
 
-        local version = '0.1'                   -- current version of script 
+        local version = '0.2'                   -- current version of script 
         ------------------------------------------------------------------------
         local LOGGING = false                   -- true or false LOGGING info to domoticz log.
         
@@ -12,7 +12,7 @@
         local sensors = {}
         sensors['CEM2_id1'] = DZ_id1      
         sensors['CEM2_id2'] = DZ_id2      
-        sensors['sum'] =  DZ_id3        
+        sensors['sum'] =  DZ_id3
         
         local maxTime = 7200        -- Maximul time interval
         local timeZone = 3600       -- CEM2 Time zone
@@ -26,7 +26,7 @@ local unixEpoch = os.time(os.date("!*t")) + timeZone
 local function log(domoticz, text, lvlError)
     local lvlLog = domoticz.LOG_INFO
     if lvlError ~= nil and lvlError == true then lvlLog = domoticz.LOG_ERROR end 
-    if LOGGING then domoticz.log(text, lvlLog) end 
+    if LOGGING or lvlError then domoticz.log(text, lvlLog) end 
 end 
         
 return {
@@ -79,14 +79,15 @@ return {
                         local timestamp = sensorCem.values[1]["timestamp"]
                         
                         local delay = (unixEpoch - tonumber(timestamp) / 1000)
-                        log(domoticz, 'Time since last measurement: ' .. delay/60)
+                        local delayMinutes = math.floor(delay/60)
+                        log(domoticz, 'Time since last measurement: ' .. delayMinutes .. ' minutes.')
                         if (delay < maxTime) then
                             sum = sum + value
                             domoticz.devices(sensors[varId]).updateCounter(value * mult)
                             log(domoticz,'Device value updated')
                         else
                             updateSum = false
-                            log(domoticz,'Sensor value is too old!', true)
+                            log(domoticz,'Sensor value is too old! Time since last measurement:' .. delayMinutes .. ' minutes.', true)
                         end
                     end
                     
