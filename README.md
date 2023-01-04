@@ -1,4 +1,4 @@
-# Domticz-Events-Scripts
+# Domoticz-Events-Scripts
 Set of Domoticz Events scripts writen in python or DzVents
 
 ## CHMI_hydro 
