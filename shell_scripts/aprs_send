@@ -10,6 +10,6 @@
 # $3 = SSID (e.g. 5 for WX station)
 # $4 = APRS-IS password
 # $5 = APRS-IS address
-# $6 = APRS-IS poert (14580)
+# $6 = APRS-IS port (14580)
 
 printf "%s\n" "user $2 pass $4" "$2-$3>APRS,TCPIP*:$1" | nc $5 $6
