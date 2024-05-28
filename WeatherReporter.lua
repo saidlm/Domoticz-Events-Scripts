@@ -352,8 +352,11 @@ return {
             log(domoticz,'APRS - Sending WX Report: ' .. aprsMsg)
             
             -- ShellScript $1=aprsMsg $2=Call $3=SSID $4=pass $5=IS-server $6=IS-port
-            os.execute(aprsCfg.cmd .. ' ' .. aprsMsg .. ' ' .. aprsCfg.call .. ' ' .. 
-                aprsCfg.ssid .. ' ' .. aprsCfg.pass .. ' ' .. aprsCfg.aprsis .. ' '  .. aprsCfg.port)
+            domoticz.executeShellCommand({
+                command = aprsCfg.cmd .. ' ' .. aprsMsg .. ' ' .. aprsCfg.call .. ' ' .. 
+                aprsCfg.ssid .. ' ' .. aprsCfg.pass .. ' ' .. aprsCfg.aprsis .. ' '  .. aprsCfg.port,
+                timeout = 60
+                })
         end
         
         log(domoticz,'Done')
