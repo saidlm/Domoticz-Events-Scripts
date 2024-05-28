@@ -2,7 +2,7 @@
 -- Base on - origanal script from Toulon7559; addapted for dzVents by Henry Joubert
 -- Martin Saidl 2021
 
-        local version = '1.8'                   -- current version of script 
+        local version = '1.9'                   -- current version of script 
         ------------------------------------------------------------------------
         local LOGGING = false                   -- true or false LOGGING info to domoticz log.
         
@@ -91,7 +91,6 @@ local function positiveonly(num)
         return 0
     end
 end
-
 local function log(domoticz, text, lvlError)
     local lvlLog = domoticz.LOG_INFO
     if lvlError ~= nil and lvlError == true then lvlLog = domoticz.LOG_ERROR end 
@@ -99,22 +98,22 @@ local function log(domoticz, text, lvlError)
 end     
 
 return {
-	logging = {
+    logging = {
         marker = "WeatherReporter"
     },
-	on = {
+    on = {
         timer = { 'every minute' },
         devices = { WindMeter, RainMeter },
         httpResponses = { 'owmResponse', 'wuResponse', 'wcResponse' },
         customEvents = { 'nextIn30s' },
-	    },
+    },
     data = {
         rainLast = { initial = 0 },
         rainWindow = { history = true, maxItems = 3000, maxHours = 25 },
         windGustWindow = { history = true, maxItems = 40, maxMinutes = 10 },
         rainRateWindow = { history = true, maxItems = 40, maxMinutes = 10 },
-        },
-	execute = function(domoticz, item)
+    },
+    execute = function(domoticz, item)
         
         log(domoticz,'')
         log(domoticz,'WeatherReporter  ver: '.. version)
@@ -155,7 +154,7 @@ return {
         unixEpoch = os.time(os.date("!*t"))
     
         timestring = year .. "-" .. month .. "-" .. day .. "+" .. hour .. "%3A" .. minutes .. "%3A" .. seconds
-        asrsTimestamp = day .. hour .. minutes
+        aprsTimestamp = day .. hour .. minutes
     
         wu = {}
         owm = {}
@@ -167,7 +166,7 @@ return {
             hum ='h..', press = 'b....'
         }
         
-        if Outside_Temp_Hum ~= '' and domoticz.devices(Outside_Temp_Hum).lastUpdate.minutesAgo < AliveTime then
+        if Outside_Temp_Hum ~= '' and  domoticz.devices(Outside_Temp_Hum).lastUpdate.minutesAgo < AliveTime then
             tempC = domoticz.devices(Outside_Temp_Hum).temperature
             tempF = CelciusToFarenheit(tempC)
             hum = domoticz.devices(Outside_Temp_Hum).humidity
@@ -181,13 +180,13 @@ return {
             owm.dew_point = tonumber(string.format("%3.1f",dewpC))
             wc.temp = 'temp/' .. string.format("%.0f", (tempC * 10))
             wc.hum = 'hum/' .. string.format("%.0f", hum)
-            wc.dewp = 'dew/' ..string.format("%.0f", (dewpC * 10))
+            wc.dewp = 'dew/' .. string.format("%.0f", (dewpC * 10))
             aprs.temp = 't' .. string.format("%03.0f", tempF)
             aprs.hum = 'h' .. string.format("%02.0f", hum)
             log(domoticz,'Adding Temp, hum, dewp: ' .. tempC .. ', ' .. hum .. ', ' .. dewpC)
         end
         
-        if Barometer ~= '' and domoticz.devices(Barometer).lastUpdate.minutesAgo < AliveTime then
+        if Barometer ~= '' and  domoticz.devices(Barometer).lastUpdate.minutesAgo < AliveTime then
             press = domoticz.devices(Barometer).barometer
             wu.press = 'baromin=' ..string.format("%2.2f", hPatoInches(press))
             owm.pressure = tonumber(string.format("%4.1f", press))
@@ -281,6 +280,18 @@ return {
             log(domoticz,'Adding Solar Radiation: ' .. radiation)
         end
         
+        if HeatIndex ~= '' and domoticz.devices(HeatIndex).lastUpdate.minutesAgo < AliveTime then
+            heatIndex = domoticz.devices(HeatIndex).temperature
+            wc.heatIndex = 'heat/' .. string.format("%.0f", (heatIndex * 10))
+        end
+        
+        if WindChill ~= '' and domoticz.devices(WindChill).lastUpdate.minutesAgo < AliveTime then
+            windChill = domoticz.devices(WindChill).temperature
+            wc.windChill = 'chill/' .. string.format("%.0f", (windChill * 10))
+        end
+        
+        -- Reporting --
+        
         -- WU like servers reporting
         if wuCfg ~= nil then
             url = ''
@@ -337,13 +348,13 @@ return {
                 url =  serverUrl,
                 method = 'GET',
                 callback = 'wcResponse'
-                })
+            })
             
         end 
         
         -- APRS reporting (every 5 minutes)
         if aprsCfg ~= nil and math.fmod(minutes, 5) == 0 and tonumber(seconds) < 10 then
-            aprsMsg = '@' .. asrsTimestamp .. 'z' .. aprsCfg.loc .. '_'
+            aprsMsg = '@' .. aprsTimestamp .. 'z' .. aprsCfg.loc .. '_'
         
             aprsMsg = aprsMsg .. aprs.windDir .. '/' .. aprs.windSpeed .. aprs.windGust ..
                 aprs.temp .. aprs.rainHour .. aprs.rain24 .. aprs.rainDay .. aprs.hum .. 
@@ -356,10 +367,10 @@ return {
                 command = aprsCfg.cmd .. ' ' .. aprsMsg .. ' ' .. aprsCfg.call .. ' ' .. 
                 aprsCfg.ssid .. ' ' .. aprsCfg.pass .. ' ' .. aprsCfg.aprsis .. ' '  .. aprsCfg.port,
                 timeout = 60
-                })
+            })
         end
         
         log(domoticz,'Done')
         log(domoticz,'')
-	end
+    end
 }
