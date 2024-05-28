@@ -2,7 +2,7 @@
 -- Base on - origanal script from Toulon7559; addapted for dzVents by Henry Joubert
 -- Martin Saidl 2021
 
-        local version = '1.7'                   -- current version of script 
+        local version = '1.8'                   -- current version of script 
         ------------------------------------------------------------------------
         local LOGGING = false                   -- true or false LOGGING info to domoticz log.
         
