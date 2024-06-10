@@ -12,4 +12,4 @@
 # $5 = APRS-IS address
 # $6 = APRS-IS port (14580)
 
-printf "%s\n" "user $2 pass $4" "$2-$3>APRS,TCPIP*:$1" | nc $5 $6
+printf "%s\n" "user $2 pass $4" "$2-$3>APRS,TCPIP*:$1" | nc -q 2 $5 $6
