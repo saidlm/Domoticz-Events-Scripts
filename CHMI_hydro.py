@@ -3,6 +3,7 @@
 # Martin Saidl 2021
 
 import urllib.request
+import urllib.error
 import re
 import datetime
 import DomoticzEvents as domoticz
